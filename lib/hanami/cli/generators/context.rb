@@ -150,6 +150,10 @@ module Hanami
           RUBY_VERSION >= "3.1"
         end
 
+        def gem_source
+          options[:gem_source]
+        end
+
         private
 
         def database_option

@@ -2,6 +2,7 @@
 
 require "dry/inflector"
 require_relative "../../errors"
+require "tty-prompt"
 
 module Hanami
   module CLI
@@ -138,6 +139,15 @@ module Hanami
             skip_view: SKIP_VIEW_DEFAULT,
             database: nil
           )
+            prompt = TTY::Prompt.new
+            interactive_options = prompt.collect do
+              key(:gem_source).select("What would you like to be your gem source?", %w(gems.coop rubygems.org))
+              key(:database).select("What database will you use?", %w(None PostgreSQL SQLite MySQL))
+            end
+
+            database = interactive_options[:database] ? interactive_options[:database].downcase : database
+            gem_source = interactive_options.fetch(:gem_source, "gems.coop")
+            
             # rubocop:enable Metrics/ParameterLists
             app = inflector.underscore(app)
 
@@ -155,7 +165,8 @@ module Hanami
                 skip_assets: skip_assets,
                 skip_db: skip_db,
                 skip_view: skip_view,
-                database: normalized_database
+                database: normalized_database,
+                gem_source: gem_source
               )
               generator.call(app, context: context) do
                 if skip_install
