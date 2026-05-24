@@ -16,6 +16,16 @@ RSpec.describe Hanami::CLI::Commands::App::DB::Create, :app_integration do
   let(:out) { StringIO.new }
   def output = out.string
 
+  def build_db_url(filename)
+    if RUBY_ENGINE == "jruby"
+      # with JDBC driver we need to specify the absolute path inside a temp directory,
+      # because somehow it does not use Dir.chmod as a base for resolving a relative path
+      "jdbc:sqlite:#{File.join(@dir, filename)}"
+    else
+      "sqlite://#{filename}"
+    end
+  end
+
   before do
     # Prevent the command from exiting the spec run in the case of unexpected system call failures
     allow(command).to receive(:exit)
@@ -58,7 +68,7 @@ RSpec.describe Hanami::CLI::Commands::App::DB::Create, :app_integration do
 
     describe "sqlite" do
       before do
-        ENV["DATABASE_URL"] = "sqlite://db/app.sqlite3"
+        ENV["DATABASE_URL"] = build_db_url("db/app.sqlite3")
       end
 
       it "creates the database" do
@@ -68,7 +78,8 @@ RSpec.describe Hanami::CLI::Commands::App::DB::Create, :app_integration do
 
         expect { Hanami.app["db.gateway"] }.not_to raise_error
 
-        expect(output).to include "database db/app.sqlite3 created"
+        prefix = RUBY_ENGINE == "jruby" ? "#{@dir}/" : ""
+        expect(output).to include "database #{prefix}db/app.sqlite3 created"
       end
 
       it "does not create the database if it already exists" do
@@ -77,7 +88,8 @@ RSpec.describe Hanami::CLI::Commands::App::DB::Create, :app_integration do
 
         command.call
 
-        expect(output).to include "database db/app.sqlite3 created"
+        prefix = RUBY_ENGINE == "jruby" ? "#{@dir}/" : ""
+        expect(output).to include "database #{prefix}db/app.sqlite3 created"
       end
     end
 
@@ -142,8 +154,8 @@ RSpec.describe Hanami::CLI::Commands::App::DB::Create, :app_integration do
 
     describe "sqlite" do
       before do
-        ENV["DATABASE_URL"] = "sqlite://db/app.sqlite3"
-        ENV["MAIN__DATABASE_URL"] = "sqlite://db/main.sqlite3"
+        ENV["DATABASE_URL"] = build_db_url("db/app.sqlite3")
+        ENV["MAIN__DATABASE_URL"] = build_db_url("db/main.sqlite3")
       end
 
       it "creates each database" do
@@ -155,8 +167,9 @@ RSpec.describe Hanami::CLI::Commands::App::DB::Create, :app_integration do
         expect { Hanami.app["db.gateway"] }.not_to raise_error
         expect { Main::Slice["db.gateway"] }.not_to raise_error
 
-        expect(output).to include "database db/app.sqlite3 created"
-        expect(output).to include "database db/main.sqlite3 created"
+        prefix = RUBY_ENGINE == "jruby" ? "#{@dir}/" : ""
+        expect(output).to include "database #{prefix}db/app.sqlite3 created"
+        expect(output).to include "database #{prefix}db/main.sqlite3 created"
       end
 
       it "creates the app database when given --app" do
@@ -167,7 +180,8 @@ RSpec.describe Hanami::CLI::Commands::App::DB::Create, :app_integration do
 
         expect { Hanami.app["db.gateway"] }.not_to raise_error
 
-        expect(output).to include "database db/app.sqlite3 created"
+        prefix = RUBY_ENGINE == "jruby" ? "#{@dir}/" : ""
+        expect(output).to include "database #{prefix}db/app.sqlite3 created"
         expect(output).not_to include "db/main.sqlite3"
       end
 
@@ -179,7 +193,8 @@ RSpec.describe Hanami::CLI::Commands::App::DB::Create, :app_integration do
 
         expect { Main::Slice["db.gateway"] }.not_to raise_error
 
-        expect(output).to include "database db/main.sqlite3 created"
+        prefix = RUBY_ENGINE == "jruby" ? "#{@dir}/" : ""
+        expect(output).to include "database #{prefix}db/main.sqlite3 created"
         expect(output).not_to include "db/app.sqlite3"
       end
 
@@ -197,10 +212,11 @@ RSpec.describe Hanami::CLI::Commands::App::DB::Create, :app_integration do
         expect(Hanami.app.root.join("db", "app.sqlite3").exist?).to be false
         expect(Hanami.app.root.join("db", "main.sqlite3").exist?).to be true
 
-        expect(output).to include "failed to create database db/app.sqlite3"
+        prefix = RUBY_ENGINE == "jruby" ? "#{@dir}/" : ""
+        expect(output).to include "failed to create database #{prefix}db/app.sqlite3"
         expect(output).to include "app-db-err"
 
-        expect(output).to include "database db/main.sqlite3 created"
+        expect(output).to include "database #{prefix}db/main.sqlite3 created"
 
         expect(command).to have_received(:exit).with(2).once
       end
@@ -208,7 +224,7 @@ RSpec.describe Hanami::CLI::Commands::App::DB::Create, :app_integration do
       context "app with gateways" do
         def before_prepare
           write "config/db/.keep", ""
-          ENV["DATABASE_URL__EXTRA"] = "sqlite://db/app_extra.sqlite3"
+          ENV["DATABASE_URL__EXTRA"] = build_db_url("db/app_extra.sqlite3")
         end
 
         it "creates the databases for all the app's gateways when given --app" do
@@ -216,9 +232,10 @@ RSpec.describe Hanami::CLI::Commands::App::DB::Create, :app_integration do
             .to change { Hanami.app.root.join("db", "app.sqlite3").exist? }.to(true)
             .and change { Hanami.app.root.join("db", "app_extra.sqlite3").exist? }.to(true)
 
+          prefix = RUBY_ENGINE == "jruby" ? "#{@dir}/" : ""
           expect(output).to include_in_order(
-            "database db/app.sqlite3 created",
-            "database db/app_extra.sqlite3 created"
+            "database #{prefix}db/app.sqlite3 created",
+            "database #{prefix}db/app_extra.sqlite3 created"
           )
         end
 
@@ -235,7 +252,7 @@ RSpec.describe Hanami::CLI::Commands::App::DB::Create, :app_integration do
       context "slice with gateways" do
         def before_prepare
           write "slices/main/config/db/.keep", ""
-          ENV["MAIN__DATABASE_URL__EXTRA"] = "sqlite://db/main_extra.sqlite3"
+          ENV["MAIN__DATABASE_URL__EXTRA"] = build_db_url("db/main_extra.sqlite3")
         end
 
         it "creates the databases for all the slices's gateways when given --slice" do
@@ -299,7 +316,7 @@ RSpec.describe Hanami::CLI::Commands::App::DB::Create, :app_integration do
 
     describe "automatic test env execution" do
       before do
-        ENV["DATABASE_URL"] = "sqlite://db/app.sqlite3"
+        ENV["DATABASE_URL"] = build_db_url("db/app.sqlite3")
       end
 
       around do |example|

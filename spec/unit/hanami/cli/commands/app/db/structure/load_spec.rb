@@ -16,6 +16,16 @@ RSpec.describe Hanami::CLI::Commands::App::DB::Structure::Load, :app_integration
   let(:out) { StringIO.new }
   def output = out.string
 
+  def build_db_url(filename)
+    if RUBY_ENGINE == "jruby"
+      # with JDBC driver we need to specify the absolute path inside a temp directory,
+      # because somehow it does not use Dir.chmod as a base for resolving a relative path
+      "jdbc:sqlite:#{File.join(@dir, filename)}"
+    else
+      "sqlite://#{filename}"
+    end
+  end
+
   before do
     # Prevent the command from exiting the spec run in the case of unexpected system call failures
     allow(command).to receive(:exit)
@@ -90,8 +100,8 @@ RSpec.describe Hanami::CLI::Commands::App::DB::Structure::Load, :app_integration
 
   describe "sqlite" do
     before do
-      ENV["DATABASE_URL"] = "sqlite://db/app.sqlite3"
-      ENV["MAIN__DATABASE_URL"] = "sqlite://db/main.sqlite3"
+      ENV["DATABASE_URL"] = build_db_url("db/app.sqlite3")
+      ENV["MAIN__DATABASE_URL"] = build_db_url("db/main.sqlite3")
       db_structure_dump
     end
 
@@ -101,15 +111,16 @@ RSpec.describe Hanami::CLI::Commands::App::DB::Structure::Load, :app_integration
         .and change { Main::Slice["db.gateway"].connection.tables.include?(:comments) }
         .to true
 
+      prefix = RUBY_ENGINE == "jruby" ? "#{@dir}/" : ""
       expect(output).to include_in_order(
-        "db/app.sqlite3 structure loaded from config/db/structure.sql",
-        "db/main.sqlite3 structure loaded from slices/main/config/db/structure.sql"
+        "#{prefix}db/app.sqlite3 structure loaded from config/db/structure.sql",
+        "#{prefix}db/main.sqlite3 structure loaded from slices/main/config/db/structure.sql"
       )
     end
 
     context "app with gateways" do
       def before_prepare
-        ENV["DATABASE_URL__EXTRA"] = "sqlite://db/app_extra.sqlite3"
+        ENV["DATABASE_URL__EXTRA"] = build_db_url("db/app_extra.sqlite3")
 
         write "config/db/extra_migrate/20240602201330_create_users.rb", <<~RUBY
           ROM::SQL.migration do
@@ -129,9 +140,10 @@ RSpec.describe Hanami::CLI::Commands::App::DB::Structure::Load, :app_integration
           .and change { Hanami.app["db.gateways.extra"].connection.tables.include?(:users) }
           .to true
 
+        prefix = RUBY_ENGINE == "jruby" ? "#{@dir}/" : ""
         expect(output).to include_in_order(
-          "db/app.sqlite3 structure loaded from config/db/structure.sql in",
-          "db/app_extra.sqlite3 structure loaded from config/db/extra_structure.sql in"
+          "#{prefix}db/app.sqlite3 structure loaded from config/db/structure.sql in",
+          "#{prefix}db/app_extra.sqlite3 structure loaded from config/db/extra_structure.sql in"
         )
       end
 
@@ -142,14 +154,15 @@ RSpec.describe Hanami::CLI::Commands::App::DB::Structure::Load, :app_integration
           .and not_change { Hanami.app["db.gateways.default"].connection.tables.include?(:posts) }
           .from false
 
-        expect(output).to include "db/app_extra.sqlite3 structure loaded from config/db/extra_structure.sql in"
+        prefix = RUBY_ENGINE == "jruby" ? "#{@dir}/" : ""
+        expect(output).to include "#{prefix}db/app_extra.sqlite3 structure loaded from config/db/extra_structure.sql in"
         expect(output).not_to include "db/app.sqlite3"
       end
     end
 
     context "slice with gateways" do
       def before_prepare
-        ENV["MAIN__DATABASE_URL__EXTRA"] = "sqlite://db/main_extra.sqlite3"
+        ENV["MAIN__DATABASE_URL__EXTRA"] = build_db_url("db/main_extra.sqlite3")
 
         write "slices/main/config/db/extra_migrate/20240602201330_create_users.rb", <<~RUBY
           ROM::SQL.migration do
@@ -190,8 +203,9 @@ RSpec.describe Hanami::CLI::Commands::App::DB::Structure::Load, :app_integration
 
   describe "postgres", :postgres do
     before do
-      ENV["DATABASE_URL"] = "#{POSTGRES_BASE_URL}_app"
-      ENV["MAIN__DATABASE_URL"] = "#{POSTGRES_BASE_URL}_main"
+      base_url = RUBY_ENGINE == "jruby" ? "jdbc:#{POSTGRES_BASE_URL}" : POSTGRES_BASE_URL
+      ENV["DATABASE_URL"] = "#{base_url}_app"
+      ENV["MAIN__DATABASE_URL"] = "#{base_url}_main"
       db_structure_dump
     end
 
@@ -285,7 +299,7 @@ RSpec.describe Hanami::CLI::Commands::App::DB::Structure::Load, :app_integration
 
   describe "automatic test env execution" do
     before do
-      ENV["DATABASE_URL"] = "sqlite://db/app.sqlite3"
+      ENV["DATABASE_URL"] = build_db_url("db/app.sqlite3")
     end
 
     around do |example|

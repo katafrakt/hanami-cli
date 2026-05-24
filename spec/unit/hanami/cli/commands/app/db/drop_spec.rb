@@ -16,6 +16,16 @@ RSpec.describe Hanami::CLI::Commands::App::DB::Drop, :app_integration do
   let(:out) { StringIO.new }
   def output = out.string
 
+  def build_db_url(filename)
+    if RUBY_ENGINE == "jruby"
+      # with JDBC driver we need to specify the absolute path inside a temp directory,
+      # because somehow it does not use Dir.chmod as a base for resolving a relative path
+      "jdbc:sqlite:#{File.join(@dir, filename)}"
+    else
+      "sqlite://#{filename}"
+    end
+  end
+
   before do
     # Prevent the command from exiting the spec run in the case of unexpected system call failures
     allow(command).to receive(:exit)
@@ -59,8 +69,8 @@ RSpec.describe Hanami::CLI::Commands::App::DB::Drop, :app_integration do
 
   describe "sqlite" do
     before do
-      ENV["DATABASE_URL"] = "sqlite://db/app.sqlite3"
-      ENV["MAIN__DATABASE_URL"] = "sqlite://db/main.sqlite3"
+      ENV["DATABASE_URL"] = build_db_url("db/app.sqlite3")
+      ENV["MAIN__DATABASE_URL"] = build_db_url("db/main.sqlite3")
     end
 
     it "drops each database" do
@@ -72,8 +82,9 @@ RSpec.describe Hanami::CLI::Commands::App::DB::Drop, :app_integration do
         .and change { File.exist?(@dir.join("db", "main.sqlite3")) }
         .to false
 
-      expect(output).to include "database db/app.sqlite3 dropped"
-      expect(output).to include "database db/main.sqlite3 dropped"
+      prefix = RUBY_ENGINE == "jruby" ? "#{@dir}/" : ""
+      expect(output).to include "database #{prefix}db/app.sqlite3 dropped"
+      expect(output).to include "database #{prefix}db/main.sqlite3 dropped"
 
       expect(command).not_to have_received(:exit)
     end
@@ -90,7 +101,8 @@ RSpec.describe Hanami::CLI::Commands::App::DB::Drop, :app_integration do
 
       expect(File.exist?(@dir.join("db", "main.sqlite3"))).to be true
 
-      expect(output).to include "database db/app.sqlite3 dropped"
+      prefix = RUBY_ENGINE == "jruby" ? "#{@dir}/" : ""
+      expect(output).to include "database #{prefix}db/app.sqlite3 dropped"
       expect(output).not_to include "db/main.sqlite3"
 
       expect(command).not_to have_received(:exit)
@@ -120,8 +132,9 @@ RSpec.describe Hanami::CLI::Commands::App::DB::Drop, :app_integration do
       expect(File.exist?(@dir.join("db", "app.sqlite3"))).to be false
       expect(File.exist?(@dir.join("db", "main.sqlite3"))).to be false
 
-      expect(output).to include "database db/app.sqlite3 dropped"
-      expect(output).to include "database db/main.sqlite3 dropped"
+      prefix = RUBY_ENGINE == "jruby" ? "#{@dir}/" : ""
+      expect(output).to include "database #{prefix}db/app.sqlite3 dropped"
+      expect(output).to include "database #{prefix}db/main.sqlite3 dropped"
 
       expect(command).not_to have_received(:exit)
     end
@@ -140,7 +153,8 @@ RSpec.describe Hanami::CLI::Commands::App::DB::Drop, :app_integration do
       expect(File.exist?(@dir.join("db", "app.sqlite3"))).to be true
       expect(File.exist?(@dir.join("db", "main.sqlite3"))).to be false
 
-      expect(output).to include "failed to drop database db/app.sqlite3"
+      prefix = RUBY_ENGINE == "jruby" ? "#{@dir}/" : ""
+      expect(output).to include "failed to drop database #{prefix}db/app.sqlite3"
       expect(output).to include "Permission denied" # from Errno::EACCESS
 
       expect(output).to include "database db/main.sqlite3 dropped"
@@ -153,8 +167,8 @@ RSpec.describe Hanami::CLI::Commands::App::DB::Drop, :app_integration do
         write "config/db/.keep", ""
         write "slices/main/config/db/.keep", ""
 
-        ENV["DATABASE_URL__EXTRA"] = "sqlite://db/app_extra.sqlite3"
-        ENV["MAIN__DATABASE_URL__EXTRA"] = "sqlite://db/main_extra.sqlite3"
+        ENV["DATABASE_URL__EXTRA"] = build_db_url("db/app_extra.sqlite3")
+        ENV["MAIN__DATABASE_URL__EXTRA"] = build_db_url("db/main_extra.sqlite3")
       end
 
       before do
@@ -169,11 +183,12 @@ RSpec.describe Hanami::CLI::Commands::App::DB::Drop, :app_integration do
           .and change { File.exist?(@dir.join("db", "main.sqlite3")) }.to(false)
           .and change { File.exist?(@dir.join("db", "main_extra.sqlite3")) }.to(false)
 
+        prefix = RUBY_ENGINE == "jruby" ? "#{@dir}/" : ""
         expect(output.strip).to eq(<<~TEXT.strip)
-          => database db/app.sqlite3 dropped
-          => database db/app_extra.sqlite3 dropped
-          => database db/main.sqlite3 dropped
-          => database db/main_extra.sqlite3 dropped
+          => database #{prefix}db/app.sqlite3 dropped
+          => database #{prefix}db/app_extra.sqlite3 dropped
+          => database #{prefix}db/main.sqlite3 dropped
+          => database #{prefix}db/main_extra.sqlite3 dropped
         TEXT
 
         expect(command).not_to have_received(:exit)
@@ -183,7 +198,7 @@ RSpec.describe Hanami::CLI::Commands::App::DB::Drop, :app_integration do
     context "app with gateways" do
       def before_prepare
         write "config/db/.keep", ""
-        ENV["DATABASE_URL__EXTRA"] = "sqlite://db/app_extra.sqlite3"
+        ENV["DATABASE_URL__EXTRA"] = build_db_url("db/app_extra.sqlite3")
       end
 
       before do
@@ -196,9 +211,10 @@ RSpec.describe Hanami::CLI::Commands::App::DB::Drop, :app_integration do
           .to change { File.exist?(@dir.join("db", "app.sqlite3")) }.to(false)
           .and change { File.exist?(@dir.join("db", "app_extra.sqlite3")) }.to false
 
+        prefix = RUBY_ENGINE == "jruby" ? "#{@dir}/" : ""
         expect(output).to include_in_order(
-          "database db/app.sqlite3 dropped",
-          "database db/app_extra.sqlite3 dropped"
+          "database #{prefix}db/app.sqlite3 dropped",
+          "database #{prefix}db/app_extra.sqlite3 dropped"
         )
 
         expect(command).not_to have_received(:exit)
@@ -217,7 +233,7 @@ RSpec.describe Hanami::CLI::Commands::App::DB::Drop, :app_integration do
     context "slice with gateways" do
       def before_prepare
         write "slices/main/config/db/.keep", ""
-        ENV["MAIN__DATABASE_URL__EXTRA"] = "sqlite://db/main_extra.sqlite3"
+        ENV["MAIN__DATABASE_URL__EXTRA"] = build_db_url("db/main_extra.sqlite3")
       end
 
       before do
@@ -253,8 +269,9 @@ RSpec.describe Hanami::CLI::Commands::App::DB::Drop, :app_integration do
 
   describe "postgres", :postgres do
     before do
-      ENV["DATABASE_URL"] = "#{POSTGRES_BASE_URL}_app"
-      ENV["MAIN__DATABASE_URL"] = "#{POSTGRES_BASE_URL}_main"
+      base_url = RUBY_ENGINE == "jruby" ? "jdbc:#{POSTGRES_BASE_URL}" : POSTGRES_BASE_URL
+      ENV["DATABASE_URL"] = "#{base_url}_app"
+      ENV["MAIN__DATABASE_URL"] = "#{base_url}_main"
     end
 
     it "drops each database" do
@@ -448,7 +465,7 @@ RSpec.describe Hanami::CLI::Commands::App::DB::Drop, :app_integration do
 
   describe "automatic test env execution" do
     before do
-      ENV["DATABASE_URL"] = "sqlite://db/app.sqlite3"
+      ENV["DATABASE_URL"] = build_db_url("db/app.sqlite3")
     end
 
     around do |example|

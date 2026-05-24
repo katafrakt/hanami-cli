@@ -6,6 +6,16 @@ RSpec.describe Hanami::CLI::Commands::App::DB::Version, :app_integration do
   let(:out) { StringIO.new }
   def output = out.string
 
+  def build_db_url(filename)
+    if RUBY_ENGINE == "jruby"
+      # with JDBC driver we need to specify the absolute path inside a temp directory,
+      # because somehow it does not use Dir.chmod as a base for resolving a relative path
+      "jdbc:sqlite:#{File.join(@dir, filename)}"
+    else
+      "sqlite://#{filename}"
+    end
+  end
+
   before do
     @env = ENV.to_h
     allow(Hanami::Env).to receive(:loaded?).and_return(false)
@@ -64,8 +74,8 @@ RSpec.describe Hanami::CLI::Commands::App::DB::Version, :app_integration do
   end
 
   before do
-    ENV["DATABASE_URL"] = "sqlite://db/app.sqlite3"
-    ENV["MAIN__DATABASE_URL"] = "sqlite://db/main.sqlite3"
+    ENV["DATABASE_URL"] = build_db_url("db/app.sqlite3")
+    ENV["MAIN__DATABASE_URL"] = build_db_url("db/main.sqlite3")
 
     db_migrate
   end
@@ -73,16 +83,18 @@ RSpec.describe Hanami::CLI::Commands::App::DB::Version, :app_integration do
   it "prints the versions for all databases" do
     command.call
 
+    prefix = RUBY_ENGINE == "jruby" ? "#{@dir}/" : ""
     expect(output).to include_in_order(
-      "db/app.sqlite3 current schema version is 20240602191330_create_categories",
-      "db/main.sqlite3 current schema version is 20240602211330_create_comments"
+      "#{prefix}db/app.sqlite3 current schema version is 20240602191330_create_categories",
+      "#{prefix}db/main.sqlite3 current schema version is 20240602211330_create_comments"
     )
   end
 
   it "prints the version of the app db only when given --app" do
     command.call(app: true)
 
-    expect(output).to include "db/app.sqlite3 current schema version is 20240602191330_create_categories"
+    prefix = RUBY_ENGINE == "jruby" ? "#{@dir}/" : ""
+    expect(output).to include "#{prefix}db/app.sqlite3 current schema version is 20240602191330_create_categories"
     expect(output).not_to include "db/main.sqlite3"
   end
 
@@ -96,7 +108,8 @@ RSpec.describe Hanami::CLI::Commands::App::DB::Version, :app_integration do
   it "prints an error when given a slice without migrations" do
     command.call(slice: "admin")
 
-    expect(output).to include %(Cannot find version for database db/app.sqlite3: no migrations directory at slices/admin/config/db/migrate/)
+    prefix = RUBY_ENGINE == "jruby" ? "#{@dir}/" : ""
+    expect(output).to include %(Cannot find version for database #{prefix}db/app.sqlite3: no migrations directory at slices/admin/config/db/migrate/)
     expect(output).not_to include "current schema version"
   end
 
@@ -113,15 +126,16 @@ RSpec.describe Hanami::CLI::Commands::App::DB::Version, :app_integration do
         end
       RUBY
 
-      ENV["DATABASE_URL__EXTRA"] = "sqlite://db/app_extra.sqlite3"
+      ENV["DATABASE_URL__EXTRA"] = build_db_url("./db/app_extra.sqlite3")
     end
 
     it "prints the versions for all an app's databases when given --app" do
       command.call(app: true)
 
+      prefix = RUBY_ENGINE == "jruby" ? "#{@dir}/" : ""
       expect(output).to include_in_order(
-        "db/app.sqlite3 current schema version is 20240602191330_create_categories",
-        "db/app_extra.sqlite3 current schema version is 20240921211330_create_users"
+        "#{prefix}db/app.sqlite3 current schema version is 20240602191330_create_categories",
+        "#{prefix}db/app_extra.sqlite3 current schema version is 20240921211330_create_users"
       )
     end
 
@@ -146,7 +160,7 @@ RSpec.describe Hanami::CLI::Commands::App::DB::Version, :app_integration do
         end
       RUBY
 
-      ENV["MAIN__DATABASE_URL__EXTRA"] = "sqlite://db/main_extra.sqlite3"
+      ENV["MAIN__DATABASE_URL__EXTRA"] = build_db_url("./db/main_extra.sqlite3")
     end
 
     it "prints the versions for all an app's databases when given --app" do
