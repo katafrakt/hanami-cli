@@ -198,9 +198,16 @@ module Hanami
               private
 
               def database_path
-                database_uri.path ||
-                  # For `jdbc:` URIs the path is exposed via the opaque component
-                  database_uri.opaque.sub(%r{^\w+:/?}, "")
+                return database_uri.path if database_uri.path
+
+                opaque = database_uri.opaque
+                if opaque =~ %r{^\w+://}
+                  # Handle URIs like 'jdbc:postgresql://localhost/mydb'
+                  URI(opaque).path
+                else
+                  # Handle URIs like `jdbc:sqlite:db/app.sqlite3`,
+                  opaque.sub(%r{^\w+:/?}, "")
+                end
               end
 
               def jruby?

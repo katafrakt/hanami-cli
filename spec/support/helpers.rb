@@ -27,6 +27,14 @@ module RSpec
         jruby? && dir ? File.join(dir, url) : url
       end
 
+      def postgres_url(url)
+        if jruby?
+          url.sub(%r{^postgres(?:ql)?://}, "jdbc:postgresql://")
+        else
+          url
+        end
+      end
+
       def jruby?
         RUBY_ENGINE == "jruby"
       end

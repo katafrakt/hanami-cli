@@ -87,8 +87,15 @@ module Hanami
               end
 
               def cli_env_vars
+                uri =
+                  if database_uri.scheme == "jdbc"
+                    URI(database_url.sub(%r{^jdbc:}, ""))
+                  else
+                    database_uri
+                  end
+
                 @cli_env_vars ||= %i[host port user password].each_with_object({}) do |field, vars|
-                  value = database_uri.public_send(field).to_s
+                  value = uri.public_send(field).to_s
                   vars["PG#{field}".upcase] = value unless value.empty?
                 end
               end
