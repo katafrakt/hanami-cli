@@ -22,7 +22,7 @@ module RSpec
       end
 
       def sqlite_db_name(url, dir: nil)
-        # JDBC driver does not use Dir.current for building the path, so we need to construct
+        # JDBC driver does not use Dir.pwd for building the path, so we need to construct
         # the correct path ourselves
         jruby? && dir ? File.join(dir, url) : url
       end
