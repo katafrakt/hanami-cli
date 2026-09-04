@@ -29,7 +29,18 @@ module RSpec
 
       def postgres_url(url)
         if jruby?
-          url.sub(%r{^postgres(?:ql)?://}, "jdbc:postgresql://")
+          # pgJDBC only accepts `jdbc:postgresql://host:port/dbname` URLs, with credentials
+          # as `?user=&password=` query params (it does not parse `user:password@` userinfo),
+          # so convert CRuby-style `postgres://user:pass@host:port/dbname` URLs accordingly.
+          uri = URI(url)
+          jdbc_url = +"jdbc:postgresql://#{uri.host}"
+          jdbc_url << ":#{uri.port}" if uri.port
+          jdbc_url << uri.path.to_s
+          params = URI.decode_www_form(uri.query || "").to_h
+          params["user"] = uri.user if uri.user
+          params["password"] = uri.password if uri.password
+          jdbc_url << "?#{URI.encode_www_form(params)}" unless params.empty?
+          jdbc_url
         else
           url
         end
