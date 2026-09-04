@@ -47,5 +47,20 @@ RSpec.describe Hanami::CLI::Commands::App::DB::Utils::Postgres do
         expect(database.send(:cli_env_vars)).to eq({})
       end
     end
+
+    context "when credentials are passed as query params (pgJDBC style)" do
+      let(:user) { "" }
+      let(:password) { "" }
+      let(:query) { "user=fred&password=secret" }
+
+      it "uses the query params" do
+        expect(database.send(:cli_env_vars)).to eq(
+          "PGHOST" => "localhost",
+          "PGPORT" => "5433",
+          "PGUSER" => "fred",
+          "PGPASSWORD" => "secret"
+        )
+      end
+    end
   end
 end

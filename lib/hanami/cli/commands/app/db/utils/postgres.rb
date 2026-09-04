@@ -87,12 +87,11 @@ module Hanami
               end
 
               def cli_env_vars
-                # TODO: support options in query params for JDBC driver
                 @cli_env_vars ||= {
                   "PGHOST" => real_database_uri.host.to_s,
                   "PGPORT" => real_database_uri.port.to_s,
-                  "PGUSER" => real_database_uri.user.to_s,
-                  "PGPASSWORD" => real_database_uri.password.to_s
+                  "PGUSER" => env_user,
+                  "PGPASSWORD" => env_password
                 }.reject { |_, value| value.empty? }
               end
 
@@ -106,6 +105,25 @@ module Hanami
                   else
                     database_uri
                   end
+              end
+
+              # JDBC URLs may carry credentials as query params, e.g.
+              # `jdbc:postgresql://localhost/mydb?user=fred&password=secret`
+              # (pgJDBC style), instead of userinfo.
+              def query_params
+                @query_params ||= URI.decode_www_form(real_database_uri.query || "").to_h
+              end
+
+              def env_user
+                user = real_database_uri.user.to_s
+                user.empty? ? query_params["user"].to_s : user
+              end
+
+              def env_password
+                password = real_database_uri.password.to_s
+                return password unless password.empty?
+
+                (query_params["password"] || query_params["pass"]).to_s
               end
             end
           end
