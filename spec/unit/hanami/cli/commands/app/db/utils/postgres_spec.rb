@@ -12,8 +12,11 @@ RSpec.describe Hanami::CLI::Commands::App::DB::Utils::Postgres do
   }
 
   let(:database_uri) {
-    Struct.new(:host, :port, :user, :password).new(host, port, user, password)
+    Struct.new(:scheme, :host, :port, :user, :password, :query).new(scheme, host, port, user, password, query)
   }
+
+  let(:scheme) { "postgres" }
+  let(:query) { nil }
 
   before do
     allow(database).to receive(:database_uri).and_return(database_uri)

@@ -87,17 +87,25 @@ module Hanami
               end
 
               def cli_env_vars
-                uri =
+                # TODO: support options in query params for JDBC driver
+                @cli_env_vars ||= {
+                  "PGHOST" => real_database_uri.host.to_s,
+                  "PGPORT" => real_database_uri.port.to_s,
+                  "PGUSER" => real_database_uri.user.to_s,
+                  "PGPASSWORD" => real_database_uri.password.to_s
+                }.reject { |_, value| value.empty? }
+              end
+
+              # On JRuby, `database_uri` for a `jdbc:postgresql://...` URL is an opaque
+              # `URI::Generic` with no host/port/user info. Strip the `jdbc:` prefix
+              # to get a parseable `postgresql://...` URI.
+              def real_database_uri
+                @real_database_uri ||=
                   if database_uri.scheme == "jdbc"
                     URI(database_url.sub(%r{^jdbc:}, ""))
                   else
                     database_uri
                   end
-
-                @cli_env_vars ||= %i[host port user password].each_with_object({}) do |field, vars|
-                  value = uri.public_send(field).to_s
-                  vars["PG#{field}".upcase] = value unless value.empty?
-                end
               end
             end
           end
