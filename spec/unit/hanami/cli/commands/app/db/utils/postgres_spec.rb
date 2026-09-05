@@ -12,8 +12,11 @@ RSpec.describe Hanami::CLI::Commands::App::DB::Utils::Postgres do
   }
 
   let(:database_uri) {
-    Struct.new(:host, :port, :user, :password).new(host, port, user, password)
+    Struct.new(:scheme, :host, :port, :user, :password, :query).new(scheme, host, port, user, password, query)
   }
+
+  let(:scheme) { "postgres" }
+  let(:query) { nil }
 
   before do
     allow(database).to receive(:database_uri).and_return(database_uri)
@@ -42,6 +45,21 @@ RSpec.describe Hanami::CLI::Commands::App::DB::Utils::Postgres do
 
       it "does not override libpq environment variables" do
         expect(database.send(:cli_env_vars)).to eq({})
+      end
+    end
+
+    context "when credentials are passed as query params (pgJDBC style)" do
+      let(:user) { "" }
+      let(:password) { "" }
+      let(:query) { "user=fred&password=secret" }
+
+      it "uses the query params" do
+        expect(database.send(:cli_env_vars)).to eq(
+          "PGHOST" => "localhost",
+          "PGPORT" => "5433",
+          "PGUSER" => "fred",
+          "PGPASSWORD" => "secret"
+        )
       end
     end
   end

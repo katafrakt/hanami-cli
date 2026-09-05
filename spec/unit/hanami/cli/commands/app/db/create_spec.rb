@@ -76,7 +76,7 @@ RSpec.describe Hanami::CLI::Commands::App::DB::Create, :app_integration do
 
     describe "postgres", :postgres do
       before do
-        ENV["DATABASE_URL"] = "#{POSTGRES_BASE_URL}_app"
+        ENV["DATABASE_URL"] = postgres_url("#{POSTGRES_BASE_URL}_app")
       end
 
       it "creates the database" do
@@ -253,8 +253,8 @@ RSpec.describe Hanami::CLI::Commands::App::DB::Create, :app_integration do
 
     describe "postgres", :postgres do
       before do
-        ENV["DATABASE_URL"] = "#{POSTGRES_BASE_URL}_app"
-        ENV["MAIN__DATABASE_URL"] = "#{POSTGRES_BASE_URL}_main"
+        ENV["DATABASE_URL"] = postgres_url("#{POSTGRES_BASE_URL}_app")
+        ENV["MAIN__DATABASE_URL"] = postgres_url("#{POSTGRES_BASE_URL}_main")
       end
 
       it "creates each database" do

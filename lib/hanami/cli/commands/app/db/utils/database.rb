@@ -79,16 +79,7 @@ module Hanami
               end
 
               def name
-                path = database_path
-                # On JRuby we probably converted a relative path to an absolute path, because
-                # the JDBC driver only accepts the latter. Now it's time to convert it back.
-                # This means that JRuby users might sometimes see relative path when they actually
-                # used abosulte path in the configuration.
-                if jruby?
-                  pathname = Pathname.new(path).expand_path
-                  path = pathname.relative_path_from(Dir.current).to_s if pathname.to_s.start_with?("#{Dir.current}/")
-                end
-                path.sub(%r{^/}, "")
+                database_uri.path.sub(%r{^/}, "")
               end
 
               def database_url
@@ -207,9 +198,16 @@ module Hanami
               private
 
               def database_path
-                database_uri.path ||
-                  # For `jdbc:` URIs the path is exposed via the opaque component
-                  database_uri.opaque.sub(%r{^\w+:/?}, "")
+                return database_uri.path if database_uri.path
+
+                opaque = database_uri.opaque
+                if opaque =~ %r{^\w+://}
+                  # Handle URIs like 'jdbc:postgresql://localhost/mydb'
+                  URI(opaque).path
+                else
+                  # Handle URIs like `jdbc:sqlite:db/app.sqlite3`,
+                  opaque.sub(%r{^\w+:/?}, "")
+                end
               end
 
               def jruby?

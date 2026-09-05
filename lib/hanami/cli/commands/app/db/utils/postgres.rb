@@ -87,10 +87,43 @@ module Hanami
               end
 
               def cli_env_vars
-                @cli_env_vars ||= %i[host port user password].each_with_object({}) do |field, vars|
-                  value = database_uri.public_send(field).to_s
-                  vars["PG#{field}".upcase] = value unless value.empty?
-                end
+                @cli_env_vars ||= {
+                  "PGHOST" => real_database_uri.host.to_s,
+                  "PGPORT" => real_database_uri.port.to_s,
+                  "PGUSER" => env_user,
+                  "PGPASSWORD" => env_password
+                }.reject { |_, value| value.empty? }
+              end
+
+              # On JRuby, `database_uri` for a `jdbc:postgresql://...` URL is an opaque
+              # `URI::Generic` with no host/port/user info. Strip the `jdbc:` prefix
+              # to get a parseable `postgresql://...` URI.
+              def real_database_uri
+                @real_database_uri ||=
+                  if database_uri.scheme == "jdbc"
+                    URI(database_url.sub(%r{^jdbc:}, ""))
+                  else
+                    database_uri
+                  end
+              end
+
+              # JDBC URLs may carry credentials as query params, e.g.
+              # `jdbc:postgresql://localhost/mydb?user=fred&password=secret`
+              # (pgJDBC style), instead of userinfo.
+              def query_params
+                @query_params ||= URI.decode_www_form(real_database_uri.query || "").to_h
+              end
+
+              def env_user
+                user = real_database_uri.user.to_s
+                user.empty? ? query_params["user"].to_s : user
+              end
+
+              def env_password
+                password = real_database_uri.password.to_s
+                return password unless password.empty?
+
+                (query_params["password"] || query_params["pass"]).to_s
               end
             end
           end
